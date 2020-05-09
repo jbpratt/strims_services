@@ -1,0 +1,13 @@
+[package]
+name = "strims_services"
+version = "0.1.0"
+authors = ["jbpratt78 <jbpratt78@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+reqwest = "0.10.4"
+serde = { version = "1.0.107", features = ["derive"] }
+anyhow = "1.0"
+async-trait = "0.1.30"
