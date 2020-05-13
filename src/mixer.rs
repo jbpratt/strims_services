@@ -1,16 +1,29 @@
 use async_trait::async_trait;
-use serde::Deserialize;
 use reqwest::{Client, Response};
-use std::sync::Arc;
+use serde::Deserialize;
 use serde_json::Value;
 use serde_json_schema::Schema;
 use std::convert::TryFrom;
+use std::sync::Arc;
 
-use crate::service::{API, Service};
+use crate::service::{Service, ServiceChannel, API};
 
-#[derive(Deserialize)]
-pub struct MixerChannel {
-    pub name: String,
+const URL: &'static str = "https://mixer.com/api/v1/channels/";
+
+#[derive(Deserialize, Debug)]
+pub struct Channel {
+    #[serde(rename(deserialize = "name"))]
+    title: String,
+    online: bool,
+    audience: String,
+    #[serde(rename(deserialize = "viewersCurrent"))]
+    viewers_current: u32,
+    thumbnail: Thumbnail,
+}
+
+#[derive(Deserialize, Debug)]
+struct Thumbnail {
+    url: String
 }
 
 pub struct Mixer {
@@ -25,40 +38,58 @@ impl API for Mixer {
 }
 
 #[async_trait]
-impl Service<Mixer, MixerChannel> for Mixer {
+impl Service<Mixer, Channel> for Mixer {
     fn new(client: Arc<Client>) -> Mixer {
         Mixer { client }
     }
 
-    fn validate_schema(data: &Value) -> Result<(), Vec<String>> {
+    fn validate_schema(data: Value) -> Result<(), Vec<String>> {
         let raw_schema: &str = r#"
           {
             "type": "object",
             "properties": {
-              "views": {"type": "integer"},
-              "preview": {
+              "name": {"type": "string"},
+              "audience": {"type": "string"},
+              "online": {"type": "boolean"},
+              "thumbnail": {
                 "type": "object",
                 "properties": {
-                  "large": {
+                  "url": {
                     "type": "string",
                     "format": "uri"
-                  }
-                },
-                "required": ["large"]
+                  },
+                  "required": ["url"]
+                }
               },
-              "title": {"type": "string"}
+              "viewersCurrent": {"type": "integer"}
             },
-            "required": ["views", "preview", "title"]
+            "required": ["name", "online", "thumbnail", "viewersCurrent", "audience"]
           }"#;
         // TODO: handle error here with `?`
         let schema = Schema::try_from(raw_schema).unwrap();
         schema.validate(&data)
     }
 
-    async fn get_channel_by_name(&mut self) -> reqwest::Result<MixerChannel> {
-        self.request("https://pastebin.com/raw/6Ux1nT23")
-            .await?
-            .json::<MixerChannel>()
-            .await
+    async fn get_channel_by_name(&mut self, name: &str) -> reqwest::Result<Channel> {
+        let url = URL.to_owned() + name;
+        self.request(&url).await?.json::<Channel>().await
+    }
+}
+
+impl ServiceChannel for Channel {
+    fn get_live(&self) -> bool {
+        self.online
+    }
+    fn is_nsfw(&self) -> bool {
+        self.audience == "18+!"
+    }
+    fn get_title(&self) -> &str {
+        self.title.as_str()
+    }
+    fn get_thumbnail(&self) -> &str {
+        self.thumbnail.url.as_str()
+    }
+    fn get_viewers(&self) -> u32 {
+        self.viewers_current
     }
 }
