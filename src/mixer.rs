@@ -1,9 +1,10 @@
-use anyhow::Context;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use reqwest::{Client, Response};
 use serde::Deserialize;
 use serde_json::Value;
 use serde_json_schema::Schema;
+
 use std::convert::TryFrom;
 use std::sync::Arc;
 
@@ -33,19 +34,25 @@ pub struct Mixer {
 
 #[async_trait]
 impl API for Mixer {
-    async fn request<'a>(&mut self, url: &'a str) -> anyhow::Result<Response, reqwest::Error> {
-        self.client.get(url).send().await
+    async fn request<'a>(
+        &mut self,
+        req: reqwest::RequestBuilder,
+    ) -> anyhow::Result<Response, reqwest::Error> {
+        let req = req.build()?;
+        let resp = self.client.execute(req).await?;
+        resp.error_for_status_ref()?;
+        Ok(resp)
     }
 }
 
 #[async_trait]
-impl Service<Mixer, Channel> for Mixer {
+impl Service<Channel> for Mixer {
     fn new(client: Arc<Client>) -> Mixer {
         Mixer { client }
     }
 
     fn validate_schema(data: &Value) -> anyhow::Result<(), String> {
-        const raw_schema: &str = r#"
+        let raw_schema = r#"
           {
             "type": "object",
             "properties": {
@@ -72,11 +79,25 @@ impl Service<Mixer, Channel> for Mixer {
 
     async fn get_channel_by_name(&mut self, name: &str) -> anyhow::Result<Channel> {
         let url = URL.to_owned() + name;
-        self.request(&url)
+        let json_resp = self
+            .request(self.client.get(&url))
             .await?
-            .json::<Channel>()
-            .await
-            .context("failed to get_channel_by_name")
+            .json::<Value>()
+            .await?;
+
+        match Mixer::validate_schema(&json_resp) {
+            Ok(_) => {
+                let channel: Channel = serde_json::from_value(json_resp)?;
+                return Ok(channel);
+            }
+            Err(e) => {
+                return Err(anyhow!(
+                    "response failed validation: {} {}",
+                    json_resp.to_string(),
+                    e
+                ))
+            }
+        }
     }
 }
 
@@ -87,11 +108,11 @@ impl ServiceChannel for Channel {
     fn is_nsfw(&self) -> bool {
         self.audience == "18+!"
     }
-    fn get_title(&self) -> &str {
-        self.title.as_str()
+    fn get_title(&self) -> String {
+        self.title.clone()
     }
-    fn get_thumbnail(&self) -> &str {
-        self.thumbnail.url.as_str()
+    fn get_thumbnail(&self) -> String {
+        self.thumbnail.url.clone()
     }
     fn get_viewers(&self) -> u32 {
         self.viewers_current

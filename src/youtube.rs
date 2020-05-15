@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::anyhow;
 use async_trait::async_trait;
 use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
@@ -87,13 +87,19 @@ impl Youtube {
 
 #[async_trait]
 impl API for Youtube {
-    async fn request<'a>(&mut self, url: &'a str) -> anyhow::Result<Response, reqwest::Error> {
-        self.client.get(url).send().await
+    async fn request<'a>(
+        &mut self,
+        req: reqwest::RequestBuilder,
+    ) -> anyhow::Result<Response, reqwest::Error> {
+        let req = req.build()?;
+        let resp = self.client.execute(req).await?;
+        resp.error_for_status_ref()?;
+        Ok(resp)
     }
 }
 
 #[async_trait]
-impl Service<Youtube, Channel> for Youtube {
+impl Service<Channel> for Youtube {
     fn new(client: Arc<Client>) -> Youtube {
         let token = env::var("YOUTUBE_TOKEN").expect("`YOUTUBE_TOKEN` set for authorization");
         Youtube {
@@ -195,17 +201,28 @@ impl Service<Youtube, Channel> for Youtube {
             "contentDetails",
         ];
 
-        let url = Url::parse_with_params(&self.url, &[("id", name), ("part", &parts.join(","))])?
-            .to_string();
-
-        let json_resp = self.request(&url).await?.json::<Value>().await?;
+        let json_resp = self
+            .request(
+                self.client
+                    .get(&self.url)
+                    .query(&[("id", name), ("part", &parts.join(","))]),
+            )
+            .await?
+            .json::<Value>()
+            .await?;
 
         match Youtube::validate_schema(&json_resp) {
             Ok(_) => {
                 let results: VideosResult = serde_json::from_value(json_resp)?;
                 return Ok(results.items[0].clone());
             }
-            Err(e) => return Err(anyhow!("response failed validation: {}", e)),
+            Err(e) => {
+                return Err(anyhow!(
+                    "response failed validation: {} {}",
+                    json_resp.to_string(),
+                    e
+                ))
+            }
         }
     }
 }
@@ -217,11 +234,11 @@ impl ServiceChannel for Channel {
     fn is_nsfw(&self) -> bool {
         self.content_details.content_rating.yt_rating == "ytAgeRestricted"
     }
-    fn get_title(&self) -> &str {
-        self.snippet.title.as_str()
+    fn get_title(&self) -> String {
+        self.snippet.title.clone()
     }
-    fn get_thumbnail(&self) -> &str {
-        self.snippet.thumbnails.medium.url.as_str()
+    fn get_thumbnail(&self) -> String {
+        self.snippet.thumbnails.medium.url.clone()
     }
     fn get_viewers(&self) -> u32 {
         self.statistics.view_count.parse::<u32>().unwrap()

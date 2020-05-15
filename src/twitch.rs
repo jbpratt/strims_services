@@ -36,7 +36,10 @@ pub struct Twitch {
 
 #[async_trait]
 impl API for Twitch {
-    async fn request<'a>(&mut self, url: &'a str) -> anyhow::Result<Response, reqwest::Error> {
+    async fn request<'a>(
+        &mut self,
+        req: reqwest::RequestBuilder,
+    ) -> anyhow::Result<Response, reqwest::Error> {
         let mut headers = HeaderMap::new();
         headers.insert(
             AUTHORIZATION,
@@ -47,12 +50,16 @@ impl API for Twitch {
             header::ACCEPT,
             "application/vnd.twitchtv.v5+json".parse().unwrap(),
         );
-        self.client.get(url).headers(headers).send().await
+        let req = req.headers(headers).build()?;
+        let resp = self.client.execute(req).await?;
+
+        resp.error_for_status_ref()?;
+        Ok(resp)
     }
 }
 
 #[async_trait]
-impl Service<Twitch, Channel> for Twitch {
+impl Service<Channel> for Twitch {
     fn new(client: Arc<Client>) -> Twitch {
         let token = env::var("TWITCH_TOKEN").unwrap();
         let client_id = env::var("TWITCH_CLIENT_ID").unwrap();
@@ -73,7 +80,7 @@ impl Service<Twitch, Channel> for Twitch {
 
     async fn get_channel_by_name(&mut self, name: &str) -> anyhow::Result<Channel> {
         let url = URL.to_owned() + name;
-        self.request(&url)
+        self.request(self.client.get(&url))
             .await?
             .json::<Channel>()
             .await
@@ -88,11 +95,11 @@ impl ServiceChannel for Channel {
     fn is_nsfw(&self) -> bool {
         false
     }
-    fn get_title(&self) -> &str {
-        self.game.as_str()
+    fn get_title(&self) -> String {
+        self.game.clone()
     }
-    fn get_thumbnail(&self) -> &str {
-        self.preview.as_str()
+    fn get_thumbnail(&self) -> String {
+        self.preview.clone()
     }
     fn get_viewers(&self) -> u32 {
         self.viewers
