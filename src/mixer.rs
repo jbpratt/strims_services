@@ -1,3 +1,4 @@
+use anyhow::Context;
 use async_trait::async_trait;
 use reqwest::{Client, Response};
 use serde::Deserialize;
@@ -23,7 +24,7 @@ pub struct Channel {
 
 #[derive(Deserialize, Debug)]
 struct Thumbnail {
-    url: String
+    url: String,
 }
 
 pub struct Mixer {
@@ -32,7 +33,7 @@ pub struct Mixer {
 
 #[async_trait]
 impl API for Mixer {
-    async fn request<'a>(&mut self, url: &'a str) -> reqwest::Result<Response> {
+    async fn request<'a>(&mut self, url: &'a str) -> anyhow::Result<Response, reqwest::Error> {
         self.client.get(url).send().await
     }
 }
@@ -43,8 +44,8 @@ impl Service<Mixer, Channel> for Mixer {
         Mixer { client }
     }
 
-    fn validate_schema(data: Value) -> Result<(), Vec<String>> {
-        let raw_schema: &str = r#"
+    fn validate_schema(data: &Value) -> anyhow::Result<(), String> {
+        const raw_schema: &str = r#"
           {
             "type": "object",
             "properties": {
@@ -65,14 +66,17 @@ impl Service<Mixer, Channel> for Mixer {
             },
             "required": ["name", "online", "thumbnail", "viewersCurrent", "audience"]
           }"#;
-        // TODO: handle error here with `?`
-        let schema = Schema::try_from(raw_schema).unwrap();
-        schema.validate(&data)
+        let schema = Schema::try_from(raw_schema).expect("failed to parse schema");
+        schema.validate(data).map_err(|ss| ss.into_iter().collect())
     }
 
-    async fn get_channel_by_name(&mut self, name: &str) -> reqwest::Result<Channel> {
+    async fn get_channel_by_name(&mut self, name: &str) -> anyhow::Result<Channel> {
         let url = URL.to_owned() + name;
-        self.request(&url).await?.json::<Channel>().await
+        self.request(&url)
+            .await?
+            .json::<Channel>()
+            .await
+            .context("failed to get_channel_by_name")
     }
 }
 

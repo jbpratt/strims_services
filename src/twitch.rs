@@ -1,4 +1,6 @@
+use anyhow::Context;
 use async_trait::async_trait;
+use reqwest::header::{HeaderMap, AUTHORIZATION};
 use reqwest::{header, Client, Response};
 use serde::Deserialize;
 use serde_json::Value;
@@ -34,10 +36,10 @@ pub struct Twitch {
 
 #[async_trait]
 impl API for Twitch {
-    async fn request<'a>(&mut self, url: &'a str) -> reqwest::Result<Response> {
-        let mut headers = header::HeaderMap::new();
+    async fn request<'a>(&mut self, url: &'a str) -> anyhow::Result<Response, reqwest::Error> {
+        let mut headers = HeaderMap::new();
         headers.insert(
-            "Authorization",
+            AUTHORIZATION,
             format!("Bearer {}", self.token).parse().unwrap(),
         );
         headers.insert("Client-ID", self.client_id.parse().unwrap());
@@ -63,15 +65,19 @@ impl Service<Twitch, Channel> for Twitch {
         }
     }
 
-    fn validate_schema(data: Value) -> Result<(), Vec<String>> {
+    fn validate_schema(data: &Value) -> Result<(), String> {
         let raw_schema = r#""#;
         let schema = Schema::try_from(raw_schema).unwrap();
-        schema.validate(&data)
+        schema.validate(data).map_err(|ss| ss.into_iter().collect())
     }
 
-    async fn get_channel_by_name(&mut self, name: &str) -> reqwest::Result<Channel> {
+    async fn get_channel_by_name(&mut self, name: &str) -> anyhow::Result<Channel> {
         let url = URL.to_owned() + name;
-        self.request(&url).await?.json::<Channel>().await
+        self.request(&url)
+            .await?
+            .json::<Channel>()
+            .await
+            .context("failed to make request")
     }
 }
 
@@ -92,6 +98,3 @@ impl ServiceChannel for Channel {
         self.viewers
     }
 }
-
-#[cfg(test)]
-mod tests {}
