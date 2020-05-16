@@ -1,7 +1,7 @@
 use anyhow::Context;
 use async_trait::async_trait;
 use reqwest::header::{HeaderMap, AUTHORIZATION};
-use reqwest::{header, Client, Response};
+use reqwest::{header, Response};
 use serde::Deserialize;
 use serde_json::Value;
 use serde_json_schema::Schema;
@@ -27,17 +27,18 @@ struct Name {
     display_name: String,
 }
 
-pub struct Twitch {
-    client: Arc<Client>,
+#[derive(Clone)]
+pub struct Client {
+    client: Arc<reqwest::Client>,
     token: String,
     client_id: String,
     //client_secret: String,
 }
 
 #[async_trait]
-impl API for Twitch {
+impl API for Client {
     async fn request<'a>(
-        &mut self,
+        &self,
         req: reqwest::RequestBuilder,
     ) -> anyhow::Result<Response, reqwest::Error> {
         let mut headers = HeaderMap::new();
@@ -59,12 +60,12 @@ impl API for Twitch {
 }
 
 #[async_trait]
-impl Service<Channel> for Twitch {
-    fn new(client: Arc<Client>) -> Twitch {
+impl Service<Channel> for Client {
+    fn new(client: Arc<reqwest::Client>) -> Client {
         let token = env::var("TWITCH_TOKEN").unwrap();
         let client_id = env::var("TWITCH_CLIENT_ID").unwrap();
         //let client_secret = env::var("TWITCH_CLIENT_SECRET").unwrap();
-        Twitch {
+        Client {
             client,
             token,
             client_id,
@@ -78,7 +79,7 @@ impl Service<Channel> for Twitch {
         schema.validate(data).map_err(|ss| ss.into_iter().collect())
     }
 
-    async fn get_channel_by_name(&mut self, name: &str) -> anyhow::Result<Channel> {
+    async fn get_channel_by_name(&self, name: &str) -> anyhow::Result<Channel> {
         let url = URL.to_owned() + name;
         self.request(self.client.get(&url))
             .await?

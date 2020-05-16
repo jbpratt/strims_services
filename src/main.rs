@@ -1,6 +1,7 @@
-//use futures::try_join;
+use actix_web::{get, middleware, web, App, HttpResponse, HttpServer, Result};
 use reqwest::Client;
 
+use dotenv::dotenv;
 use std::sync::Arc;
 
 mod mixer;
@@ -9,35 +10,80 @@ mod smashcast;
 mod twitch;
 mod youtube;
 
-use crate::service::{Service, ServiceChannel};
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    /*
-    let result = get_responses();
-    let (res1, res2) = result.await.unwrap();
-    println!("{}", res1.name);
-    println!("{}", res2.username);
-    */
-    let client = Arc::new(Client::new());
-    //let mut smashcast_client = smashcast::Smashcast::new(client.clone());
-    //let res = smashcast_client.get_channel_by_name("opdirtg").await;
-    //let mut mixer_client = mixer::Mixer::new(client.clone());
-    //let res = mixer_client.get_channel_by_name("ObiBertKenobi").await;
-    let mut youtube_client = youtube::Youtube::new(client.clone());
-    let res = youtube_client.get_channel_by_name("8pEpH1JWyiQ").await?;
-    println!("{:?}", res.display());
-    Ok(())
+#[derive(Clone)]
+struct AppState {
+    twitch: twitch::Client,
+    mixer: mixer::Client,
+    smashcast: smashcast::Client,
+    youtube: youtube::Client,
 }
 
-/*
-async fn get_responses() -> reqwest::Result<(mixer::Channel, twitch::Channel)> {
+use crate::service::Service;
+
+#[actix_rt::main]
+async fn main() -> std::io::Result<()> {
+    dotenv().ok();
+    env_logger::init();
+    let port = 8080;
+
     let client = Arc::new(Client::new());
-    let mut mixer_client = mixer::Mixer::new(client.clone());
-    let mut twitch_client = twitch::Twitch::new(client.clone());
-    try_join!(
-        mixer_client.get_channel_by_name("ObiBertKenobi"),
-        twitch_client.get_channel_by_name("")
-    )
+    let data = AppState {
+        twitch: twitch::Client::new(client.clone()),
+        mixer: mixer::Client::new(client.clone()),
+        smashcast: smashcast::Client::new(client.clone()),
+        youtube: youtube::Client::new(client.clone()),
+    };
+
+    let server = HttpServer::new(move || {
+        App::new()
+            .wrap(middleware::Logger::default())
+            .data(data.clone())
+            .service(no_params)
+            .service(index)
+    })
+    .bind(("localhost", port))?
+    .run();
+
+    eprintln!("Listening on localhost:{}", port);
+    server.await
 }
-*/
+
+#[get("/")]
+async fn no_params() -> &'static str {
+    "Hello world!\r\n"
+}
+
+#[get("/{service}/{name}")]
+async fn index(
+    info: web::Path<(String, String)>,
+    data: web::Data<AppState>,
+) -> Result<HttpResponse> {
+    match info.0.as_str() {
+        "twitch" => Ok(HttpResponse::NotFound().finish()),
+        "mixer" => {
+            let res = data
+                .mixer
+                .get_channel_by_name(info.1.as_str())
+                .await
+                .unwrap();
+            return Ok(HttpResponse::Ok().json(&res as &dyn service::ServiceChannel));
+        }
+        "smashcast" => {
+            let res = data
+                .smashcast
+                .get_channel_by_name(info.1.as_str())
+                .await
+                .unwrap();
+            return Ok(HttpResponse::Ok().json(&res as &dyn service::ServiceChannel));
+        }
+        "youtube" => {
+            let res = data
+                .youtube
+                .get_channel_by_name(info.1.as_str())
+                .await
+                .unwrap();
+            return Ok(HttpResponse::Ok().json(&res as &dyn service::ServiceChannel));
+        }
+        _ => return Ok(HttpResponse::NotFound().finish()),
+    }
+}

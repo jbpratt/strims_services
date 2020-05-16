@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
-use reqwest::{Client, Response};
+use reqwest::Response;
 use serde::Deserialize;
 use serde_json::Value;
 use serde_json_schema::Schema;
@@ -23,19 +23,20 @@ pub struct Channel {
     thumbnail: Thumbnail,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(serde::Serialize, Deserialize, Debug)]
 struct Thumbnail {
     url: String,
 }
 
-pub struct Mixer {
-    client: Arc<Client>,
+#[derive(Clone)]
+pub struct Client {
+    client: Arc<reqwest::Client>,
 }
 
 #[async_trait]
-impl API for Mixer {
+impl API for Client {
     async fn request<'a>(
-        &mut self,
+        &self,
         req: reqwest::RequestBuilder,
     ) -> anyhow::Result<Response, reqwest::Error> {
         let req = req.build()?;
@@ -46,9 +47,9 @@ impl API for Mixer {
 }
 
 #[async_trait]
-impl Service<Channel> for Mixer {
-    fn new(client: Arc<Client>) -> Mixer {
-        Mixer { client }
+impl Service<Channel> for Client {
+    fn new(client: Arc<reqwest::Client>) -> Client {
+        Client { client }
     }
 
     fn validate_schema(data: &Value) -> anyhow::Result<(), String> {
@@ -77,7 +78,7 @@ impl Service<Channel> for Mixer {
         schema.validate(data).map_err(|ss| ss.into_iter().collect())
     }
 
-    async fn get_channel_by_name(&mut self, name: &str) -> anyhow::Result<Channel> {
+    async fn get_channel_by_name(&self, name: &str) -> anyhow::Result<Channel> {
         let url = URL.to_owned() + name;
         let json_resp = self
             .request(self.client.get(&url))
@@ -85,7 +86,7 @@ impl Service<Channel> for Mixer {
             .json::<Value>()
             .await?;
 
-        match Mixer::validate_schema(&json_resp) {
+        match Client::validate_schema(&json_resp) {
             Ok(_) => {
                 let channel: Channel = serde_json::from_value(json_resp)?;
                 return Ok(channel);

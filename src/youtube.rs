@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
-use reqwest::{Client, Response};
-use serde::{Deserialize, Serialize};
+use reqwest::Response;
+use serde::Deserialize;
 use serde_json::Value;
 use serde_json_schema::Schema;
 use url::Url;
@@ -15,14 +15,14 @@ use crate::service::{Service, ServiceChannel, API};
 // just using default parts needed for now
 const URL: &str = "https://www.googleapis.com/youtube/v3/videos";
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VideosResult {
     items: Vec<Channel>,
     page_info: PageInfo,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Channel {
     id: String,
@@ -31,52 +31,54 @@ pub struct Channel {
     statistics: Statistics,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, Deserialize)]
 struct Snippet {
     title: String,
     thumbnails: Thumbnails,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, Deserialize)]
 struct Thumbnails {
     medium: Medium,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, Deserialize)]
 struct Medium {
     url: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ContentDetails {
     content_rating: ContentRating,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ContentRating {
+    #[serde(default)]
     yt_rating: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Statistics {
     view_count: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PageInfo {
     total_results: i64,
 }
 
-pub struct Youtube {
-    client: Arc<Client>,
+#[derive(Clone)]
+pub struct Client {
+    client: Arc<reqwest::Client>,
     url: String,
 }
 
-impl Youtube {
+impl Client {
     fn with_token(mut self, token: String) -> Self {
         self.url = Url::parse_with_params(&self.url, &[("key", token)])
             .expect("failed to parse url with token")
@@ -86,23 +88,25 @@ impl Youtube {
 }
 
 #[async_trait]
-impl API for Youtube {
+impl API for Client {
     async fn request<'a>(
-        &mut self,
+        &self,
         req: reqwest::RequestBuilder,
     ) -> anyhow::Result<Response, reqwest::Error> {
+        log::info!("Making request: {:?}", req);
         let req = req.build()?;
         let resp = self.client.execute(req).await?;
         resp.error_for_status_ref()?;
+        log::debug!("{:?}", resp);
         Ok(resp)
     }
 }
 
 #[async_trait]
-impl Service<Channel> for Youtube {
-    fn new(client: Arc<Client>) -> Youtube {
+impl Service<Channel> for Client {
+    fn new(client: Arc<reqwest::Client>) -> Client {
         let token = env::var("YOUTUBE_TOKEN").expect("`YOUTUBE_TOKEN` set for authorization");
-        Youtube {
+        Client {
             client,
             url: URL.to_string(),
         }
@@ -193,7 +197,7 @@ impl Service<Channel> for Youtube {
         schema.validate(data).map_err(|ss| ss.into_iter().collect())
     }
 
-    async fn get_channel_by_name(&mut self, name: &str) -> anyhow::Result<Channel> {
+    async fn get_channel_by_name(&self, name: &str) -> anyhow::Result<Channel> {
         let parts = vec![
             "liveStreamingDetails",
             "snippet",
@@ -211,7 +215,7 @@ impl Service<Channel> for Youtube {
             .json::<Value>()
             .await?;
 
-        match Youtube::validate_schema(&json_resp) {
+        match Client::validate_schema(&json_resp) {
             Ok(_) => {
                 let results: VideosResult = serde_json::from_value(json_resp)?;
                 return Ok(results.items[0].clone());

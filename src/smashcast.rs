@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
-use reqwest::{Client, RequestBuilder, Response};
-use serde::{Deserialize, Serialize};
+use reqwest::{RequestBuilder, Response};
+use serde::Deserialize;
 use serde_json::Value;
 use serde_json_schema::Schema;
 
@@ -12,17 +12,18 @@ use crate::service::{Service, ServiceChannel, API};
 
 const URL: &'static str = "https://api.smashcast.tv/media/live/";
 
-pub struct Smashcast {
-    client: Arc<Client>,
+#[derive(Clone)]
+pub struct Client {
+    client: Arc<reqwest::Client>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VideosResult {
     pub livestream: Vec<Channel>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Channel {
     #[serde(rename = "media_is_live")]
@@ -39,11 +40,8 @@ pub struct Channel {
 }
 
 #[async_trait]
-impl API for Smashcast {
-    async fn request<'a>(
-        &mut self,
-        req: RequestBuilder,
-    ) -> anyhow::Result<Response, reqwest::Error> {
+impl API for Client {
+    async fn request<'a>(&self, req: RequestBuilder) -> anyhow::Result<Response, reqwest::Error> {
         let req = req.build()?;
         let resp = self.client.execute(req).await?;
         resp.error_for_status_ref()?;
@@ -52,9 +50,9 @@ impl API for Smashcast {
 }
 
 #[async_trait]
-impl Service<Channel> for Smashcast {
-    fn new(client: Arc<Client>) -> Smashcast {
-        Smashcast { client }
+impl Service<Channel> for Client {
+    fn new(client: Arc<reqwest::Client>) -> Client {
+        Client { client }
     }
 
     fn validate_schema(data: &Value) -> anyhow::Result<(), String> {
@@ -91,7 +89,7 @@ impl Service<Channel> for Smashcast {
         schema.validate(data).map_err(|ss| ss.into_iter().collect())
     }
 
-    async fn get_channel_by_name(&mut self, name: &str) -> anyhow::Result<Channel> {
+    async fn get_channel_by_name(&self, name: &str) -> anyhow::Result<Channel> {
         let url = URL.to_owned() + name;
         let json_resp = self
             .request(self.client.get(&url))
@@ -101,7 +99,7 @@ impl Service<Channel> for Smashcast {
 
         println!("{}", url);
 
-        match Smashcast::validate_schema(&json_resp) {
+        match Client::validate_schema(&json_resp) {
             Ok(_) => {
                 let results: VideosResult = serde_json::from_value(json_resp)?;
                 return Ok(results.livestream[0].clone());
