@@ -3,12 +3,10 @@ use async_trait::async_trait;
 use reqwest::Response;
 use serde::Deserialize;
 use serde_json::Value;
-use serde_json_schema::Schema;
 
-use std::convert::TryFrom;
 use std::sync::Arc;
 
-use crate::service::{Service, ServiceChannel, API};
+use crate::service::{validate_schema, Service, ServiceChannel, API};
 
 const URL: &'static str = "https://mixer.com/api/v1/channels/";
 
@@ -52,8 +50,8 @@ impl Service<Channel> for Client {
         Client { client }
     }
 
-    fn validate_schema(data: &Value) -> anyhow::Result<(), String> {
-        let raw_schema = r#"
+    fn get_schema() -> &'static str {
+        r#"
           {
             "type": "object",
             "properties": {
@@ -73,9 +71,7 @@ impl Service<Channel> for Client {
               "viewersCurrent": {"type": "integer"}
             },
             "required": ["name", "online", "thumbnail", "viewersCurrent", "audience"]
-          }"#;
-        let schema = Schema::try_from(raw_schema).expect("failed to parse schema");
-        schema.validate(data).map_err(|ss| ss.into_iter().collect())
+          }"#
     }
 
     async fn get_channel_by_name(&self, name: &str) -> anyhow::Result<Channel> {
@@ -86,7 +82,7 @@ impl Service<Channel> for Client {
             .json::<Value>()
             .await?;
 
-        match Client::validate_schema(&json_resp) {
+        match validate_schema(&json_resp, Client::get_schema()) {
             Ok(_) => {
                 let channel: Channel = serde_json::from_value(json_resp)?;
                 return Ok(channel);

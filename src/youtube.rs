@@ -3,14 +3,12 @@ use async_trait::async_trait;
 use reqwest::Response;
 use serde::Deserialize;
 use serde_json::Value;
-use serde_json_schema::Schema;
 use url::Url;
 
-use std::convert::TryFrom;
-use std::env;
 use std::sync::Arc;
 
-use crate::service::{Service, ServiceChannel, API};
+use crate::config::CONFIG;
+use crate::service::{validate_schema, Service, ServiceChannel, API};
 
 // just using default parts needed for now
 const URL: &str = "https://www.googleapis.com/youtube/v3/videos";
@@ -105,17 +103,16 @@ impl API for Client {
 #[async_trait]
 impl Service<Channel> for Client {
     fn new(client: Arc<reqwest::Client>) -> Client {
-        let token = env::var("YOUTUBE_TOKEN").expect("`YOUTUBE_TOKEN` set for authorization");
         Client {
             client,
             url: URL.to_string(),
         }
-        .with_token(token)
+        .with_token(CONFIG.youtube_token.clone())
     }
 
-    fn validate_schema(data: &Value) -> Result<(), String> {
-        let raw_schema = r#"
-          {
+    fn get_schema() -> &'static str {
+        r#"
+        {
             "type": "object",
             "properties": {
               "pageInfo": {
@@ -192,9 +189,7 @@ impl Service<Channel> for Client {
               }
             }
           }
-            "#;
-        let schema = Schema::try_from(raw_schema).expect("failed to parse schema");
-        schema.validate(data).map_err(|ss| ss.into_iter().collect())
+        "#
     }
 
     async fn get_channel_by_name(&self, name: &str) -> anyhow::Result<Channel> {
@@ -215,7 +210,7 @@ impl Service<Channel> for Client {
             .json::<Value>()
             .await?;
 
-        match Client::validate_schema(&json_resp) {
+        match validate_schema(&json_resp, Client::get_schema()) {
             Ok(_) => {
                 let results: VideosResult = serde_json::from_value(json_resp)?;
                 return Ok(results.items[0].clone());

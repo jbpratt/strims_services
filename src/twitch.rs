@@ -3,13 +3,10 @@ use async_trait::async_trait;
 use reqwest::header::{HeaderMap, AUTHORIZATION};
 use reqwest::{header, Response};
 use serde::Deserialize;
-use serde_json::Value;
-use serde_json_schema::Schema;
 use std::sync::Arc;
 
+use crate::config::CONFIG;
 use crate::service::{Service, ServiceChannel, API};
-use std::convert::TryFrom;
-use std::env;
 
 const URL: &str = "https://api.twitch.tv/helix/";
 
@@ -62,21 +59,18 @@ impl API for Client {
 #[async_trait]
 impl Service<Channel> for Client {
     fn new(client: Arc<reqwest::Client>) -> Client {
-        let token = env::var("TWITCH_TOKEN").unwrap();
-        let client_id = env::var("TWITCH_CLIENT_ID").unwrap();
         //let client_secret = env::var("TWITCH_CLIENT_SECRET").unwrap();
         Client {
             client,
-            token,
-            client_id,
+            token: CONFIG.twitch_token.clone(),
+            client_id: CONFIG.twitch_client_id.clone(),
             //   client_secret,
         }
     }
 
-    fn validate_schema(data: &Value) -> Result<(), String> {
-        let raw_schema = r#""#;
-        let schema = Schema::try_from(raw_schema).unwrap();
-        schema.validate(data).map_err(|ss| ss.into_iter().collect())
+    fn get_schema() -> &'static str {
+        r#"
+            "#
     }
 
     async fn get_channel_by_name(&self, name: &str) -> anyhow::Result<Channel> {
