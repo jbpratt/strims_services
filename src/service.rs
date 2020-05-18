@@ -1,12 +1,16 @@
 use async_trait::async_trait;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
+use serde_json_schema::Schema;
 
+use std::convert::TryFrom;
 use std::sync::Arc;
+
+use crate::errors::ApiError;
 
 #[async_trait]
 pub trait Service<J> {
     fn new(client: Arc<reqwest::Client>) -> Self;
-    fn validate_schema(data: &serde_json::Value) -> anyhow::Result<(), String>;
+    fn get_schema() -> &'static str;
     async fn get_channel_by_name(&self, name: &str) -> anyhow::Result<J>;
 }
 
@@ -39,4 +43,14 @@ impl Serialize for dyn ServiceChannel {
         state.serialize_field("viewers", &self.get_viewers())?;
         state.end()
     }
+}
+
+pub fn validate_schema(
+    data: &serde_json::Value,
+    raw_schema: &'static str,
+) -> anyhow::Result<(), ApiError> {
+    let schema = Schema::try_from(raw_schema).unwrap();
+    schema
+        .validate(data)
+        .map_err(|ss| ApiError::SchemaValidation(ss.into_iter().collect()))
 }
