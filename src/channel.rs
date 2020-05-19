@@ -20,9 +20,9 @@ const SERVICES: [&str; 11] = [
 
 #[derive(Debug, PartialEq)]
 pub struct Channel {
-    channel: String,
-    service: String,
-    stream_path: String,
+    pub channel: String,
+    pub service: String,
+    pub stream_path: String,
 }
 
 impl Channel {

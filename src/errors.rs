@@ -20,6 +20,10 @@ pub enum ApiError {
     ChannelValidation(String),
     #[error("channel failed normaliztion: {0}")]
     ChannelNormalization(#[from] url::ParseError),
+    #[error("not found")]
+    NotFound(String),
+    #[error("failed to parse uuid: {0}")]
+    CannotParseUuid(String),
 }
 
 #[derive(Debug, Error)]

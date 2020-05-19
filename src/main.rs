@@ -5,6 +5,8 @@ extern crate serde;
 #[macro_use]
 extern crate lazy_static;
 extern crate thiserror;
+#[macro_use]
+extern crate diesel_migrations;
 
 mod channel;
 mod config;
