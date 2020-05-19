@@ -4,12 +4,13 @@ extern crate diesel;
 extern crate serde;
 #[macro_use]
 extern crate lazy_static;
-extern crate thiserror;
 #[macro_use]
 extern crate diesel_migrations;
+extern crate thiserror;
 
 mod channel;
 mod config;
+mod database;
 mod errors;
 mod middleware;
 mod models;

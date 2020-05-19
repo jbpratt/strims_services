@@ -8,8 +8,7 @@ use reqwest::Client;
 use dotenv::dotenv;
 use std::sync::Arc;
 
-pub type DbPool = r2d2::Pool<ConnectionManager<SqliteConnection>>;
-
+use crate::database::DbPool;
 use crate::service::Service;
 
 pub async fn server() -> std::io::Result<()> {
