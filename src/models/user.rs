@@ -4,9 +4,9 @@ use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::channel::Channel;
+use crate::database::DbPool;
 use crate::errors::ApiError;
 use crate::schema::users;
-use crate::server::DbPool;
 
 #[derive(Queryable, Debug, Clone, Insertable, PartialEq, AsChangeset)]
 pub struct User {
@@ -26,80 +26,67 @@ pub struct User {
     pub is_admin: Option<bool>,
 }
 
-pub fn get_user_by_id(pool: &DbPool, uid: Uuid) -> Result<User, ApiError> {
+pub fn get_user_by_id(pool: &DbPool, uid: Uuid) -> anyhow::Result<User, ApiError> {
     use crate::schema::users::dsl::id;
 
     let conn = pool.get()?;
-
-    let user = users::table
+    Ok(users::table
         .filter(id.eq(uid.to_string()))
         .first::<User>(&conn)
-        .optional()?;
-
-    match user {
-        Some(user) => Ok(user),
-        None => Err(ApiError::NotFound(format!(
-            "failed to find user with id: {}",
-            uid.to_string()
-        ))),
-    }
+        .map_err(|_| {
+            ApiError::NotFound(format!("failed to find user with id: {}", uid.to_string()))
+        })?)
 }
 
-pub fn get_user_by_twitch_id(pool: &DbPool, tid: i64) -> Result<User, ApiError> {
+pub fn get_user_by_twitch_id(pool: &DbPool, tid: i64) -> anyhow::Result<User, ApiError> {
     use crate::schema::users::dsl::twitch_id;
 
     let conn = pool.get()?;
 
-    let user = users::table
+    Ok(users::table
         .filter(twitch_id.eq(tid))
         .first::<User>(&conn)
-        .optional()?;
-
-    match user {
-        Some(user) => Ok(user),
-        None => Err(ApiError::NotFound(format!(
-            "failed to find user with twitch_id: {}",
-            tid.to_string()
-        ))),
-    }
+        .map_err(|_| {
+            ApiError::NotFound(format!(
+                "failed to find user with twitch_id: {}",
+                tid.to_string()
+            ))
+        })?)
 }
 
-pub fn get_user_by_name(pool: &DbPool, user_name: &str) -> Result<User, ApiError> {
+pub fn get_user_by_name(pool: &DbPool, user_name: &str) -> anyhow::Result<User, ApiError> {
     use crate::schema::users::dsl::name;
 
     let conn = pool.get()?;
 
-    //    log::info!("getting user by name: {}", user_name);
-    let user = users::table
+    Ok(users::table
         .filter(name.eq(user_name))
         .first::<User>(&conn)
-        .optional()?;
-
-    match user {
-        Some(user) => Ok(user),
-        None => Err(ApiError::NotFound(format!(
-            "failed to find user with name: {}",
-            user_name.to_string()
-        ))),
-    }
+        .map_err(|_| {
+            ApiError::NotFound(format!(
+                "failed to find user with name: {}",
+                user_name.to_string()
+            ))
+        })?)
 }
 
-pub fn get_user_by_stream_path(pool: &DbPool, user_stream_path: &str) -> Result<User, ApiError> {
-    use crate::schema::users::dsl::*;
+pub fn get_user_by_stream_path(
+    pool: &DbPool,
+    user_stream_path: &str,
+) -> anyhow::Result<User, ApiError> {
+    use crate::schema::users::dsl::stream_path;
 
     let conn = pool.get()?;
 
-    let user = users
+    Ok(users::table
         .filter(stream_path.eq(user_stream_path))
         .first::<User>(&conn)
-        .optional()?;
-    match user {
-        Some(user) => Ok(user),
-        None => Err(ApiError::NotFound(format!(
-            "failed to find user with stream_path: {}",
-            user_stream_path.to_string()
-        ))),
-    }
+        .map_err(|_| {
+            ApiError::NotFound(format!(
+                "failed to find user with stream_path: {}",
+                user_stream_path.to_string()
+            ))
+        })?)
 }
 
 pub fn create_user(
@@ -108,7 +95,7 @@ pub fn create_user(
     chn: Channel,
     name: &str,
     ip: &str,
-) -> Result<User, ApiError> {
+) -> anyhow::Result<User, ApiError> {
     use crate::schema::users::dsl::users;
     let conn = pool.get()?;
 
@@ -137,7 +124,7 @@ pub fn create_user(
     Ok(out)
 }
 
-pub fn update_user(pool: &DbPool, update_user: &User) -> Result<User, ApiError> {
+pub fn update_user(pool: &DbPool, update_user: &User) -> anyhow::Result<(), ApiError> {
     use crate::schema::users::dsl::{id, users};
 
     let conn = pool.get()?;
@@ -147,10 +134,13 @@ pub fn update_user(pool: &DbPool, update_user: &User) -> Result<User, ApiError> 
         .set(update_user)
         .execute(&conn)?;
 
+    /*
     get_user_by_id(
-        &pool,
+        &pool.clone(),
         Uuid::parse_str(&update_user.id).map_err(|e| ApiError::CannotParseUuid(e.to_string()))?,
     )
+    */
+    Ok(())
 }
 
 impl Default for User {
@@ -189,7 +179,7 @@ mod tests {
         pool
     }
 
-    fn create_test_user(pool: &DbPool) -> Result<User, ApiError> {
+    fn create_test_user(pool: &DbPool) -> anyhow::Result<User, ApiError> {
         create_user(
             &pool,
             8,
@@ -271,7 +261,6 @@ mod tests {
         assert_eq!(unwrapped.stream_path, found_user.stream_path);
     }
 
-    /*
     #[test]
     fn it_creates_a_user_and_updates() {
         let pool = setup_pool();
@@ -282,10 +271,11 @@ mod tests {
         let mut unwrapped = new_user.unwrap();
         unwrapped.is_admin = Some(true);
 
-        let user = update_user(&pool, &unwrapped);
-        println!("{:?}", user);
-        assert!(user.is_ok());
-        assert!(user.unwrap().is_admin.unwrap());
+        let res = update_user(&pool, &unwrapped);
+        assert!(res.is_ok());
+
+        let id = Uuid::parse_str(unwrapped.id.as_str()).unwrap();
+        let found_user = get_user_by_id(&pool, id).unwrap();
+        assert!(found_user.is_admin.unwrap());
     }
-    */
 }
