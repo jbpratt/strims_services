@@ -1,13 +1,14 @@
 #![allow(dead_code)]
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
 use uuid::Uuid;
 
+use crate::channel::Channel;
 use crate::errors::ApiError;
 use crate::schema::users;
 use crate::server::DbPool;
 
-#[derive(Queryable, Debug, Clone, Insertable)]
+#[derive(Queryable, Debug, Clone, Insertable, PartialEq, AsChangeset)]
 pub struct User {
     pub id: String,
     pub twitch_id: i64,
@@ -25,72 +26,266 @@ pub struct User {
     pub is_admin: Option<bool>,
 }
 
-pub fn get_user_by_id(uid: Uuid, pool: &DbPool) -> Result<Option<User>, ApiError> {
-    use crate::schema::users::dsl::*;
+pub fn get_user_by_id(pool: &DbPool, uid: Uuid) -> Result<User, ApiError> {
+    use crate::schema::users::dsl::id;
+
     let conn = pool.get()?;
 
-    let user = users
+    let user = users::table
         .filter(id.eq(uid.to_string()))
         .first::<User>(&conn)
         .optional()?;
 
-    Ok(user)
+    match user {
+        Some(user) => Ok(user),
+        None => Err(ApiError::NotFound(format!(
+            "failed to find user with id: {}",
+            uid.to_string()
+        ))),
+    }
 }
 
-pub fn get_user_by_twitch_id(tid: i64, pool: &DbPool) -> Result<Option<User>, ApiError> {
-    use crate::schema::users::dsl::*;
+pub fn get_user_by_twitch_id(pool: &DbPool, tid: i64) -> Result<User, ApiError> {
+    use crate::schema::users::dsl::twitch_id;
+
     let conn = pool.get()?;
 
-    let user = users
+    let user = users::table
         .filter(twitch_id.eq(tid))
         .first::<User>(&conn)
         .optional()?;
 
-    Ok(user)
+    match user {
+        Some(user) => Ok(user),
+        None => Err(ApiError::NotFound(format!(
+            "failed to find user with twitch_id: {}",
+            tid.to_string()
+        ))),
+    }
 }
 
-pub fn get_user_by_name(user_name: &str, pool: &DbPool) -> Result<Option<User>, ApiError> {
-    use crate::schema::users::dsl::*;
+pub fn get_user_by_name(pool: &DbPool, user_name: &str) -> Result<User, ApiError> {
+    use crate::schema::users::dsl::name;
+
     let conn = pool.get()?;
 
-    let user = users
+    //    log::info!("getting user by name: {}", user_name);
+    let user = users::table
         .filter(name.eq(user_name))
         .first::<User>(&conn)
         .optional()?;
 
-    Ok(user)
+    match user {
+        Some(user) => Ok(user),
+        None => Err(ApiError::NotFound(format!(
+            "failed to find user with name: {}",
+            user_name.to_string()
+        ))),
+    }
 }
 
-pub fn get_user_by_stream_path(
-    user_stream_path: &str,
-    pool: &DbPool,
-) -> Result<Option<User>, ApiError> {
+pub fn get_user_by_stream_path(pool: &DbPool, user_stream_path: &str) -> Result<User, ApiError> {
     use crate::schema::users::dsl::*;
+
     let conn = pool.get()?;
 
     let user = users
         .filter(stream_path.eq(user_stream_path))
         .first::<User>(&conn)
         .optional()?;
-
-    Ok(user)
+    match user {
+        Some(user) => Ok(user),
+        None => Err(ApiError::NotFound(format!(
+            "failed to find user with stream_path: {}",
+            user_stream_path.to_string()
+        ))),
+    }
 }
 
-/*
 pub fn create_user(
-    twitch_id: u64,
-    chn: Channel,
-    ip: &str,
     pool: &DbPool,
-) -> Result<Option<User>, ApiError> {
-    use crate::schema::users::dsl::*;
+    twitch_id: i64,
+    chn: Channel,
+    name: &str,
+    ip: &str,
+) -> Result<User, ApiError> {
+    use crate::schema::users::dsl::users;
     let conn = pool.get()?;
 
+    let mut stream_path = chn.stream_path.clone();
+    if chn.stream_path.is_empty() {
+        stream_path = format!("/{}/{}", chn.service, chn.channel);
+    }
+
     let new_user = User {
+        id: Uuid::new_v4().to_hyphenated().to_string(),
         twitch_id,
+        name: name.to_string(),
+        last_ip: ip.to_string(),
+        left_chat: None,
+        is_admin: None,
+        channel: chn.channel,
+        service: chn.service,
+        stream_path,
+        ..Default::default()
     };
 
+    let out = new_user.clone();
     diesel::insert_into(users).values(new_user).execute(&conn)?;
-    Ok(new_user.clone().into())
+
+    log::info!("inserted {:?} into the users table", out);
+    Ok(out)
 }
-*/
+
+pub fn update_user(pool: &DbPool, update_user: &User) -> Result<User, ApiError> {
+    use crate::schema::users::dsl::{id, users};
+
+    let conn = pool.get()?;
+
+    diesel::update(users)
+        .filter(id.eq(update_user.id.clone()))
+        .set(update_user)
+        .execute(&conn)?;
+
+    get_user_by_id(
+        &pool,
+        Uuid::parse_str(&update_user.id).map_err(|e| ApiError::CannotParseUuid(e.to_string()))?,
+    )
+}
+
+impl Default for User {
+    fn default() -> Self {
+        Self {
+            twitch_id: 0,
+            id: String::new(),
+            name: String::new(),
+            last_ip: String::new(),
+            channel: String::new(),
+            service: String::new(),
+            stream_path: String::new(),
+            created_at: Utc::now().naive_utc(),
+            updated_at: Utc::now().naive_utc(),
+            last_seen: Utc::now().naive_utc(),
+            ban_reason: None,
+            left_chat: None,
+            is_admin: None,
+            is_banned: false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use diesel::r2d2::{self, ConnectionManager};
+    embed_migrations!();
+
+    fn setup_pool() -> DbPool {
+        let manager = ConnectionManager::<SqliteConnection>::new(":memory:");
+        let pool: DbPool = r2d2::Pool::builder()
+            .build(manager)
+            .expect("failed to create pool.");
+        embedded_migrations::run(&pool.get().unwrap()).expect("failed to run migrations");
+        pool
+    }
+
+    fn create_test_user(pool: &DbPool) -> Result<User, ApiError> {
+        create_user(
+            &pool,
+            8,
+            Channel {
+                channel: String::from("jbpratt"),
+                service: String::from("twitch"),
+                stream_path: String::new(),
+            },
+            "jbpratt",
+            "0.0.0.0",
+        )
+    }
+
+    #[test]
+    fn it_creates_a_user_and_finds_by_id() {
+        let pool = setup_pool();
+        let user = create_test_user(&pool);
+
+        assert!(user.is_ok());
+        let unwrapped = user.unwrap();
+
+        let id = Uuid::parse_str(unwrapped.id.as_str()).unwrap();
+        let found_user = get_user_by_id(&pool, id).unwrap();
+        assert_eq!(unwrapped.name, found_user.name);
+        assert_eq!(unwrapped.last_ip, found_user.last_ip);
+        assert_eq!(unwrapped.service, found_user.service);
+        assert_eq!(unwrapped.stream_path, found_user.stream_path);
+    }
+
+    #[test]
+    fn it_doesnt_find_a_user() {
+        let user_id = Uuid::new_v4();
+        let not_found_user = get_user_by_id(&setup_pool(), user_id);
+        assert!(not_found_user.is_err());
+    }
+
+    #[test]
+    fn it_creates_a_user_and_finds_by_twitch_id() {
+        let pool = setup_pool();
+        let user = create_test_user(&pool);
+
+        assert!(user.is_ok());
+        let unwrapped = user.unwrap();
+
+        let found_user = get_user_by_twitch_id(&pool, 8).unwrap();
+        assert_eq!(unwrapped.name, found_user.name);
+        assert_eq!(unwrapped.last_ip, found_user.last_ip);
+        assert_eq!(unwrapped.service, found_user.service);
+        assert_eq!(unwrapped.stream_path, found_user.stream_path);
+    }
+
+    #[test]
+    fn it_creates_a_user_and_finds_by_name() {
+        let pool = setup_pool();
+        let user = create_test_user(&pool);
+
+        assert!(user.is_ok());
+        let unwrapped = user.unwrap();
+
+        let found_user = get_user_by_name(&pool, "jbpratt").unwrap();
+        assert_eq!(unwrapped.name, found_user.name);
+        assert_eq!(unwrapped.last_ip, found_user.last_ip);
+        assert_eq!(unwrapped.service, found_user.service);
+        assert_eq!(unwrapped.stream_path, found_user.stream_path);
+    }
+
+    #[test]
+    fn it_creates_a_user_and_finds_by_stream_path() {
+        let pool = setup_pool();
+        let user = create_test_user(&pool);
+
+        assert!(user.is_ok());
+        let unwrapped = user.unwrap();
+
+        let found_user = get_user_by_stream_path(&pool, "/twitch/jbpratt").unwrap();
+        assert_eq!(unwrapped.name, found_user.name);
+        assert_eq!(unwrapped.last_ip, found_user.last_ip);
+        assert_eq!(unwrapped.service, found_user.service);
+        assert_eq!(unwrapped.stream_path, found_user.stream_path);
+    }
+
+    /*
+    #[test]
+    fn it_creates_a_user_and_updates() {
+        let pool = setup_pool();
+        let new_user = create_test_user(&pool);
+
+        assert!(new_user.is_ok());
+
+        let mut unwrapped = new_user.unwrap();
+        unwrapped.is_admin = Some(true);
+
+        let user = update_user(&pool, &unwrapped);
+        println!("{:?}", user);
+        assert!(user.is_ok());
+        assert!(user.unwrap().is_admin.unwrap());
+    }
+    */
+}
