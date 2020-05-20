@@ -178,11 +178,11 @@ mod tests {
     }
 
     #[test]
-    fn it_inserts_and_removes_a_banned_ip_range() {
+    fn it_inserts_v6_and_removes_a_banned_ip_range() {
         let pool = setup_pool();
         let banned_ip_range = BannedIpRange {
-            start: String::from("127.0.0.25"),
-            end: String::from("127.0.0.50"),
+            start: String::from("2001:0000:0000:0000:0000:0000:0000:0000"),
+            end: String::from("2001:0000:0000:0000:ffff:0000:0000:0000"),
             note: Some(String::from("duckerz")),
             ..Default::default()
         };
