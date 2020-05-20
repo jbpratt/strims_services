@@ -12,6 +12,7 @@ mod channel;
 mod config;
 mod database;
 mod errors;
+mod helpers;
 mod middleware;
 mod models;
 mod routes;

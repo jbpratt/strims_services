@@ -167,17 +167,7 @@ impl Default for User {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use diesel::r2d2::{self, ConnectionManager};
-    embed_migrations!();
-
-    fn setup_pool() -> DbPool {
-        let manager = ConnectionManager::<SqliteConnection>::new(":memory:");
-        let pool: DbPool = r2d2::Pool::builder()
-            .build(manager)
-            .expect("failed to create pool.");
-        embedded_migrations::run(&pool.get().unwrap()).expect("failed to run migrations");
-        pool
-    }
+    use crate::helpers::setup_pool;
 
     fn create_test_user(pool: &DbPool) -> anyhow::Result<User, ApiError> {
         create_user(
@@ -267,7 +257,6 @@ mod tests {
         let new_user = create_test_user(&pool);
 
         assert!(new_user.is_ok());
-
         let mut unwrapped = new_user.unwrap();
         unwrapped.is_admin = Some(true);
 

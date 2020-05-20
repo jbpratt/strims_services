@@ -24,7 +24,7 @@ impl Default for BannedIpRange {
             end: String::new(),
             note: Some(String::new()),
             created_at: Utc::now().naive_utc(),
-            updated_at: Utc::now().naive_utc(),
+            updated_at: Utc::now().naive_utc(), // there is no point in this field
         }
     }
 }
@@ -87,21 +87,10 @@ fn parse_ip(ip_addr: &str) -> anyhow::Result<Vec<u8>, ApiError> {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
-    use diesel::r2d2::{self, ConnectionManager};
-    use diesel::SqliteConnection;
-    embed_migrations!();
-
-    fn setup_pool() -> DbPool {
-        let manager = ConnectionManager::<SqliteConnection>::new(":memory:");
-        let pool: DbPool = r2d2::Pool::builder()
-            .build(manager)
-            .expect("failed to create pool");
-
-        embedded_migrations::run(&pool.get().unwrap()).expect("failed to run migrations");
-        pool
-    }
+    use crate::helpers::setup_pool;
 
     #[test]
     fn it_inserts_a_banned_ip_range() {

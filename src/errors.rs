@@ -26,6 +26,8 @@ pub enum ApiError {
     CannotParseUuid(String),
     #[error("failed to parse ipaddr: {0}")]
     CannotParseIPAddr(String),
+    #[error("invalid service: {0}")]
+    InvalidService(String),
 }
 
 #[derive(Debug, Error)]
