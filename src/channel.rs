@@ -67,7 +67,7 @@ impl Channel {
     }
 }
 
-fn valid_service(service: &str) -> bool {
+pub fn valid_service(service: &str) -> bool {
     SERVICES.contains(&service)
 }
 
