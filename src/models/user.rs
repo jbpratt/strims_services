@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
 use uuid::Uuid;
@@ -26,7 +25,7 @@ pub struct User {
     pub is_admin: Option<bool>,
 }
 
-pub fn get_user_by_id(pool: &DbPool, uid: Uuid) -> anyhow::Result<User, ApiError> {
+pub fn get_by_id(pool: &DbPool, uid: Uuid) -> anyhow::Result<User, ApiError> {
     use crate::schema::users::dsl::id;
 
     let conn = pool.get()?;
@@ -38,7 +37,7 @@ pub fn get_user_by_id(pool: &DbPool, uid: Uuid) -> anyhow::Result<User, ApiError
         })?)
 }
 
-pub fn get_user_by_twitch_id(pool: &DbPool, tid: i64) -> anyhow::Result<User, ApiError> {
+pub fn get_by_twitch_id(pool: &DbPool, tid: i64) -> anyhow::Result<User, ApiError> {
     use crate::schema::users::dsl::twitch_id;
 
     let conn = pool.get()?;
@@ -54,7 +53,7 @@ pub fn get_user_by_twitch_id(pool: &DbPool, tid: i64) -> anyhow::Result<User, Ap
         })?)
 }
 
-pub fn get_user_by_name(pool: &DbPool, user_name: &str) -> anyhow::Result<User, ApiError> {
+pub fn get_by_name(pool: &DbPool, user_name: &str) -> anyhow::Result<User, ApiError> {
     use crate::schema::users::dsl::name;
 
     let conn = pool.get()?;
@@ -70,10 +69,7 @@ pub fn get_user_by_name(pool: &DbPool, user_name: &str) -> anyhow::Result<User, 
         })?)
 }
 
-pub fn get_user_by_stream_path(
-    pool: &DbPool,
-    user_stream_path: &str,
-) -> anyhow::Result<User, ApiError> {
+pub fn get_by_stream_path(pool: &DbPool, user_stream_path: &str) -> anyhow::Result<User, ApiError> {
     use crate::schema::users::dsl::stream_path;
 
     let conn = pool.get()?;
@@ -89,7 +85,7 @@ pub fn get_user_by_stream_path(
         })?)
 }
 
-pub fn create_user(
+pub fn create(
     pool: &DbPool,
     twitch_id: i64,
     chn: Channel,
@@ -124,7 +120,7 @@ pub fn create_user(
     Ok(out)
 }
 
-pub fn update_user(pool: &DbPool, update_user: &User) -> anyhow::Result<(), ApiError> {
+pub fn update(pool: &DbPool, update_user: &User) -> anyhow::Result<(), ApiError> {
     use crate::schema::users::dsl::{id, users};
 
     let conn = pool.get()?;
@@ -170,7 +166,7 @@ mod tests {
     use crate::helpers::setup_pool;
 
     fn create_test_user(pool: &DbPool) -> anyhow::Result<User, ApiError> {
-        create_user(
+        create(
             &pool,
             8,
             Channel {
@@ -192,7 +188,7 @@ mod tests {
         let unwrapped = user.unwrap();
 
         let id = Uuid::parse_str(unwrapped.id.as_str()).unwrap();
-        let found_user = get_user_by_id(&pool, id).unwrap();
+        let found_user = get_by_id(&pool, id).unwrap();
         assert_eq!(unwrapped.name, found_user.name);
         assert_eq!(unwrapped.last_ip, found_user.last_ip);
         assert_eq!(unwrapped.service, found_user.service);
@@ -202,7 +198,7 @@ mod tests {
     #[test]
     fn it_doesnt_find_a_user() {
         let user_id = Uuid::new_v4();
-        let not_found_user = get_user_by_id(&setup_pool(), user_id);
+        let not_found_user = get_by_id(&setup_pool(), user_id);
         assert!(not_found_user.is_err());
     }
 
@@ -214,7 +210,7 @@ mod tests {
         assert!(user.is_ok());
         let unwrapped = user.unwrap();
 
-        let found_user = get_user_by_twitch_id(&pool, 8).unwrap();
+        let found_user = get_by_twitch_id(&pool, 8).unwrap();
         assert_eq!(unwrapped.name, found_user.name);
         assert_eq!(unwrapped.last_ip, found_user.last_ip);
         assert_eq!(unwrapped.service, found_user.service);
@@ -229,7 +225,7 @@ mod tests {
         assert!(user.is_ok());
         let unwrapped = user.unwrap();
 
-        let found_user = get_user_by_name(&pool, "jbpratt").unwrap();
+        let found_user = get_by_name(&pool, "jbpratt").unwrap();
         assert_eq!(unwrapped.name, found_user.name);
         assert_eq!(unwrapped.last_ip, found_user.last_ip);
         assert_eq!(unwrapped.service, found_user.service);
@@ -244,7 +240,7 @@ mod tests {
         assert!(user.is_ok());
         let unwrapped = user.unwrap();
 
-        let found_user = get_user_by_stream_path(&pool, "/twitch/jbpratt").unwrap();
+        let found_user = get_by_stream_path(&pool, "/twitch/jbpratt").unwrap();
         assert_eq!(unwrapped.name, found_user.name);
         assert_eq!(unwrapped.last_ip, found_user.last_ip);
         assert_eq!(unwrapped.service, found_user.service);
@@ -260,11 +256,11 @@ mod tests {
         let mut unwrapped = new_user.unwrap();
         unwrapped.is_admin = Some(true);
 
-        let res = update_user(&pool, &unwrapped);
+        let res = update(&pool, &unwrapped);
         assert!(res.is_ok());
 
         let id = Uuid::parse_str(unwrapped.id.as_str()).unwrap();
-        let found_user = get_user_by_id(&pool, id).unwrap();
+        let found_user = get_by_id(&pool, id).unwrap();
         assert!(found_user.is_admin.unwrap());
     }
 }
