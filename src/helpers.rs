@@ -1,6 +1,7 @@
 use diesel::r2d2::{self, ConnectionManager};
 use diesel::SqliteConnection;
 
+use crate::channel::Channel;
 use crate::database::DbPool;
 
 embed_migrations!();

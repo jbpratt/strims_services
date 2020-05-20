@@ -1,6 +1,7 @@
-#![allow(dead_code)]
 use regex::Regex;
 use url::Url;
+
+use std::hash::Hash;
 
 use crate::errors::ApiError;
 
@@ -18,7 +19,7 @@ const SERVICES: [&str; 11] = [
     "youtube-playlist",
 ];
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Hash)]
 pub struct Channel {
     pub channel: String,
     pub service: String,

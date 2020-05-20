@@ -41,5 +41,3 @@ CREATE TABLE IF NOT EXISTS `streams` (
   UNIQUE (`id`),
   UNIQUE (`channel`, `service`, `path`)
 );
-
-
