@@ -24,6 +24,8 @@ pub enum ApiError {
     NotFound(String),
     #[error("failed to parse uuid: {0}")]
     CannotParseUuid(String),
+    #[error("failed to parse ipaddr: {0}")]
+    CannotParseIPAddr(String),
 }
 
 #[derive(Debug, Error)]
