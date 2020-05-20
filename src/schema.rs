@@ -1,7 +1,7 @@
 table! {
     banned_ip_ranges (start, end) {
-        start -> Nullable<Text>,
-        end -> Nullable<Text>,
+        start -> Text,
+        end -> Text,
         note -> Nullable<Text>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
