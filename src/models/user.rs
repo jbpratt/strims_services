@@ -95,10 +95,11 @@ pub fn create(
     use crate::schema::users::dsl::users;
     let conn = pool.get()?;
 
-    let mut stream_path = chn.stream_path.clone();
-    if chn.stream_path.is_empty() {
-        stream_path = format!("/{}/{}", chn.service, chn.channel);
-    }
+    let stream_path = if chn.stream_path.is_empty() {
+        format!("/{}/{}", chn.service, chn.channel)
+    } else {
+        chn.stream_path.clone()
+    };
 
     let new_user = User {
         id: Uuid::new_v4().to_hyphenated().to_string(),

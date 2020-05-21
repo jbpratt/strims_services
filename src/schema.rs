@@ -20,7 +20,7 @@ table! {
 
 table! {
     streams (id) {
-        id -> Nullable<Integer>,
+        id -> Nullable<BigInt>,
         service -> Text,
         channel -> Text,
         path -> Nullable<Text>,

@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::service::{validate_schema, Service, ServiceChannel, API};
 
-const URL: &'static str = "https://api.smashcast.tv/media/live/";
+const URL: &str = "https://api.smashcast.tv/media/live/";
 
 #[derive(Clone)]
 pub struct Client {
@@ -98,15 +98,13 @@ impl Service<Channel> for Client {
         match validate_schema(&json_resp, Client::get_schema()) {
             Ok(_) => {
                 let results: VideosResult = serde_json::from_value(json_resp)?;
-                return Ok(results.livestream[0].clone());
+                Ok(results.livestream[0].clone())
             }
-            Err(e) => {
-                return Err(anyhow!(
-                    "response failed validation: {} {}",
-                    json_resp.to_string(),
-                    e
-                ))
-            }
+            Err(e) => Err(anyhow!(
+                "response failed validation: {} {}",
+                json_resp.to_string(),
+                e
+            )),
         }
     }
 }

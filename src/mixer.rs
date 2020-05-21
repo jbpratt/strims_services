@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::service::{validate_schema, Service, ServiceChannel, API};
 
-const URL: &'static str = "https://mixer.com/api/v1/channels/";
+const URL: &str = "https://mixer.com/api/v1/channels/";
 
 #[derive(Deserialize, Debug)]
 pub struct Channel {
@@ -85,15 +85,13 @@ impl Service<Channel> for Client {
         match validate_schema(&json_resp, Client::get_schema()) {
             Ok(_) => {
                 let channel: Channel = serde_json::from_value(json_resp)?;
-                return Ok(channel);
+                Ok(channel)
             }
-            Err(e) => {
-                return Err(anyhow!(
-                    "response failed validation: {} {}",
-                    json_resp.to_string(),
-                    e
-                ))
-            }
+            Err(e) => Err(anyhow!(
+                "response failed validation: {} {}",
+                json_resp.to_string(),
+                e
+            )),
         }
     }
 }

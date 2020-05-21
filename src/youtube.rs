@@ -213,15 +213,13 @@ impl Service<Channel> for Client {
         match validate_schema(&json_resp, Client::get_schema()) {
             Ok(_) => {
                 let results: VideosResult = serde_json::from_value(json_resp)?;
-                return Ok(results.items[0].clone());
+                Ok(results.items[0].clone())
             }
-            Err(e) => {
-                return Err(anyhow!(
-                    "response failed validation: {} {}",
-                    json_resp.to_string(),
-                    e
-                ))
-            }
+            Err(e) => Err(anyhow!(
+                "response failed validation: {} {}",
+                json_resp.to_string(),
+                e
+            )),
         }
     }
 }
