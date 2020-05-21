@@ -79,6 +79,6 @@ async fn index(
                 .unwrap();
             Ok(HttpResponse::Ok().json(&res as &dyn service::ServiceChannel))
         }
-        _ => return Ok(HttpResponse::NotFound().finish()),
+        _ => Ok(HttpResponse::NotFound().finish()),
     }
 }

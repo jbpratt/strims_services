@@ -1,7 +1,8 @@
 use regex::Regex;
 use url::Url;
 
-use std::hash::Hash;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 use crate::errors::ApiError;
 
@@ -66,6 +67,15 @@ impl Channel {
             format!("/{}/{}", self.service, self.channel)
         }
     }
+}
+pub fn get_channel_id(chn: &Channel) -> u64 {
+    calc_channel_hash(chn) & 1 << (48 - 1)
+}
+
+fn calc_channel_hash(chn: &Channel) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    chn.hash(&mut hasher);
+    hasher.finish()
 }
 
 pub fn valid_service(service: &str) -> bool {
