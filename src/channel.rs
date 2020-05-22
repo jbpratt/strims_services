@@ -20,7 +20,7 @@ const SERVICES: [&str; 11] = [
     "youtube-playlist",
 ];
 
-#[derive(Debug, PartialEq, Hash)]
+#[derive(Debug, PartialEq, Clone, Hash)]
 pub struct Channel {
     pub channel: String,
     pub service: String,
@@ -28,7 +28,7 @@ pub struct Channel {
 }
 
 impl Channel {
-    fn new(
+    pub fn new(
         channel: String,
         service: String,
         stream_path: String,
@@ -53,11 +53,16 @@ impl Channel {
                 stream_path
             )));
         }
-        Ok(Self {
+
+        let mut chn = Self {
             channel: normalized_channel,
             service,
             stream_path,
-        })
+        };
+
+        chn.stream_path = chn.get_path();
+
+        Ok(chn)
     }
 
     fn get_path(&self) -> String {
@@ -69,7 +74,7 @@ impl Channel {
     }
 }
 pub fn get_channel_id(chn: &Channel) -> u64 {
-    calc_channel_hash(chn) & 1 << (48 - 1)
+    &calc_channel_hash(chn) & 1 << (48 - 1)
 }
 
 fn calc_channel_hash(chn: &Channel) -> u64 {
@@ -179,5 +184,18 @@ mod tests {
 
         assert!(response.is_err());
         assert_eq!(response.unwrap_err(), expected_err);
+    }
+
+    #[test]
+    fn it_hashes_a_channel() {
+        let response = Channel::new(
+            String::from("test1"),
+            String::from("twitch"),
+            String::from("test2"),
+        )
+        .unwrap();
+
+        let chn_hash = get_channel_id(&response);
+        assert_eq!(chn_hash, 140737488355328);
     }
 }
