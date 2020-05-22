@@ -20,11 +20,8 @@ mod schema;
 mod server;
 mod state;
 
-mod mixer;
 mod service;
-mod smashcast;
-mod twitch;
-mod youtube;
+mod services;
 
 use crate::server::server;
 

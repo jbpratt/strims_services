@@ -1,4 +1,8 @@
-use crate::{mixer, service, smashcast, state, twitch, youtube};
+use crate::{
+    service,
+    services::{mixer, smashcast, twitch, youtube},
+    state,
+};
 
 use actix_web::{get, middleware, web, App, HttpResponse, HttpServer, Result};
 use diesel::prelude::*;
