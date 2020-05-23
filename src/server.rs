@@ -1,4 +1,5 @@
 use crate::{
+    routes::routes,
     service,
     services::{mixer, smashcast, twitch, youtube},
     state,
@@ -39,8 +40,8 @@ pub async fn server() -> std::io::Result<()> {
             .wrap(middleware::Logger::default())
             .data(data.clone())
             .data(pool.clone())
-            .service(no_params)
             .service(index)
+            .configure(routes)
     })
     .bind(("localhost", port))?
     .run()
