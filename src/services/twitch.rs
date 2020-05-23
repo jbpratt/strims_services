@@ -59,12 +59,10 @@ impl API for Client {
 #[async_trait]
 impl Service<Channel> for Client {
     fn new(client: Arc<reqwest::Client>) -> Client {
-        //let client_secret = env::var("TWITCH_CLIENT_SECRET").unwrap();
         Client {
             client,
-            token: CONFIG.twitch_token.clone(),
+            token: CONFIG.twitch_client_secret.clone(),
             client_id: CONFIG.twitch_client_id.clone(),
-            //   client_secret,
         }
     }
 
