@@ -1,11 +1,15 @@
 use crate::{
+    config::CONFIG,
+    database::DbPool,
     routes::routes,
     service,
+    service::Service,
     services::{mixer, smashcast, twitch, youtube},
     state,
+    wsservice::ws_index,
 };
 
-use actix_web::{get, middleware, web, App, HttpResponse, HttpServer, Result};
+use actix_web::{get, middleware, web, App, HttpResponse, HttpServer};
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
 use reqwest::Client;
@@ -13,16 +17,12 @@ use reqwest::Client;
 use dotenv::dotenv;
 use std::sync::Arc;
 
-use crate::database::DbPool;
-use crate::service::Service;
-
 pub async fn server() -> std::io::Result<()> {
     dotenv().ok();
     env_logger::init();
     let port = 8080;
 
-    let connspec = std::env::var("DATABASE_URL").expect("DATABASE_URL");
-    let manager = ConnectionManager::<SqliteConnection>::new(connspec);
+    let manager = ConnectionManager::<SqliteConnection>::new(CONFIG.database_url.clone());
     let pool: DbPool = r2d2::Pool::builder()
         .build(manager)
         .expect("Failed to create pool.");
@@ -41,6 +41,7 @@ pub async fn server() -> std::io::Result<()> {
             .data(data.clone())
             .data(pool.clone())
             .service(index)
+            .service(web::resource("/ws").route(web::get().to(ws_index)))
             .configure(routes)
     })
     .bind(("localhost", port))?
@@ -48,16 +49,11 @@ pub async fn server() -> std::io::Result<()> {
     .await
 }
 
-#[get("/")]
-async fn no_params() -> &'static str {
-    "Hello world!\r\n"
-}
-
 #[get("/{service}/{name}")]
 async fn index(
     info: web::Path<(String, String)>,
     data: web::Data<state::AppState>,
-) -> Result<HttpResponse> {
+) -> actix_web::Result<HttpResponse> {
     match info.0.as_str() {
         "twitch" => Ok(HttpResponse::NotFound().finish()),
         "mixer" => {

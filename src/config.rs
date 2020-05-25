@@ -2,6 +2,7 @@ use std::env;
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct Config {
+    pub database_url: String,
     pub youtube_token: String,
     pub twitch_client_id: String,
     pub twitch_client_secret: String,
@@ -17,6 +18,7 @@ lazy_static! {
 fn get_config() -> Config {
     dotenv::dotenv().ok();
 
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL");
     let youtube_token = env::var("YOUTUBE_TOKEN").expect("`YOUTUBE_TOKEN` set for authorization");
     let twitch_client_secret =
         env::var("TWITCH_CLIENT_SECRET").expect("`TWITCH_CLIENT_SECRET` set for authorization");
@@ -31,6 +33,7 @@ fn get_config() -> Config {
         .expect("i64 for JWT_TTL");
 
     Config {
+        database_url,
         youtube_token,
         twitch_client_id,
         twitch_client_secret,

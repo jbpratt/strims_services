@@ -138,7 +138,7 @@ mod tests {
             String::from(""),
         )
         .unwrap();
-        assert_eq!(response.get_path(), "/twitch/jbpratt");
+        assert_eq!(response.stream_path, "/twitch/jbpratt");
     }
 
     #[test]
