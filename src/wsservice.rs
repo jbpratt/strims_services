@@ -1,6 +1,9 @@
+use crate::database::{DbPool, DbPooledConn};
+
 use actix::prelude::*;
 use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
+use anyhow::anyhow;
 
 use std::time::{Duration, Instant};
 
@@ -9,20 +12,30 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 /// How long before lack of client response causes a timeout
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub async fn ws_index(r: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
+pub async fn ws_index(
+    r: HttpRequest,
+    stream: web::Payload,
+    data: web::Data<DbPool>,
+) -> Result<HttpResponse, Error> {
+    let conn = data.get().unwrap();
+
     log::info!("{:?}", r);
-    let res = ws::start(WSService::new(), &r, stream);
+    let res = ws::start(WSService::new(conn), &r, stream);
     log::info!("{:?}", res);
     res
 }
 
 struct WSService {
     hb: Instant,
+    db: DbPooledConn,
 }
 
 impl WSService {
-    fn new() -> Self {
-        Self { hb: Instant::now() }
+    fn new(pool: DbPooledConn) -> Self {
+        Self {
+            hb: Instant::now(),
+            db: pool,
+        }
     }
 
     /// helper method that sends ping to client every second.
@@ -64,12 +77,43 @@ impl WSService {
         if input.len() == 3 {
             let channel = input[1].clone();
             let service = input[2].clone();
-            Self::set_stream_to_channel(channel.as_str(), service.as_str(), &stream_id);
+            self.set_stream_to_channel(channel.as_str(), service.as_str(), &stream_id);
         } else if input.len() == 2 {
         }
     }
 
-    fn set_stream_to_channel(channel: &str, service: &str, stream_id: &u64) {}
+    fn set_stream_to_channel(
+        &self,
+        channel: &str,
+        service: &str,
+        stream_id: &u64,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn set_afk(
+        &self,
+        input: Vec<String>,
+        ctx: &mut <Self as Actor>::Context,
+    ) -> anyhow::Result<()> {
+        if input.len() == 2 {
+            let afk: bool = input[2].parse().unwrap();
+            // check websocket state for unchanged
+            if afk {
+                // increment stream afk
+            } else {
+                // decrement stream afk
+            }
+
+            // set stream afk to afk
+            // write out ["AFK_SET", bool]
+            ctx.text("")
+        } else {
+            return Err(anyhow!("invalid command"));
+        }
+
+        Ok(())
+    }
 }
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WSService {
