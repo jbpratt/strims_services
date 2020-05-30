@@ -19,6 +19,7 @@ mod routes;
 mod schema;
 mod server;
 mod state;
+mod stream;
 mod wsservice;
 
 mod service;

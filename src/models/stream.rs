@@ -43,7 +43,7 @@ impl Default for Stream {
     }
 }
 
-fn insert(pool: &DbPool, mut stream: Stream) -> anyhow::Result<Stream, ApiError> {
+pub fn insert(pool: &DbPool, mut stream: Stream) -> anyhow::Result<Stream, ApiError> {
     use crate::schema::streams::dsl::streams;
 
     let conn = pool.get()?;
@@ -63,7 +63,7 @@ fn insert(pool: &DbPool, mut stream: Stream) -> anyhow::Result<Stream, ApiError>
     Ok(stream)
 }
 
-fn update(pool: &DbPool, mut stream: Stream) -> anyhow::Result<(), ApiError> {
+pub fn update(pool: &DbPool, mut stream: Stream) -> anyhow::Result<(), ApiError> {
     use crate::schema::streams::dsl::{id, streams};
 
     let conn = pool.get()?;
@@ -85,7 +85,7 @@ fn update(pool: &DbPool, mut stream: Stream) -> anyhow::Result<(), ApiError> {
     Ok(())
 }
 
-fn get_by_id(pool: &DbPool, stream_id: i64) -> anyhow::Result<Stream, ApiError> {
+pub fn get_by_id(pool: &DbPool, stream_id: i64) -> anyhow::Result<Stream, ApiError> {
     use crate::schema::streams::dsl::{id, streams};
 
     let conn = pool.get()?;

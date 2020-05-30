@@ -1,9 +1,11 @@
-use crate::database::{DbPool, DbPooledConn};
+use crate::database::DbPool;
+use crate::models::stream;
 
 use actix::prelude::*;
 use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 use anyhow::anyhow;
+use uuid::Uuid;
 
 use std::time::{Duration, Instant};
 
@@ -17,24 +19,35 @@ pub async fn ws_index(
     stream: web::Payload,
     data: web::Data<DbPool>,
 ) -> Result<HttpResponse, Error> {
-    let conn = data.get().unwrap();
+    let conn = data.get_ref();
+    let req = r.connection_info();
+    let ip_addr = req.remote().unwrap_or("");
 
     log::info!("{:?}", r);
-    let res = ws::start(WSService::new(conn), &r, stream);
+    let res = ws::start(WSService::new(conn.clone(), ip_addr), &r, stream);
     log::info!("{:?}", res);
     res
 }
 
+/// state of a websocket connection
 struct WSService {
+    id: Uuid,
     hb: Instant,
-    db: DbPooledConn,
+    db: DbPool,
+    stream_id: Option<i64>,
+    afk: bool,
+    ip: String,
 }
 
 impl WSService {
-    fn new(pool: DbPooledConn) -> Self {
+    fn new(pool: DbPool, ip_addr: &str) -> Self {
         Self {
+            id: Uuid::new_v4(),
             hb: Instant::now(),
             db: pool,
+            stream_id: None,
+            afk: false,
+            ip: String::from(ip_addr),
         }
     }
 
@@ -113,6 +126,14 @@ impl WSService {
         }
 
         Ok(())
+    }
+
+    fn get_ws_stream(&self) -> anyhow::Result<stream::Stream> {
+        if self.stream_id.is_none() {
+            return Err(anyhow!("Invalid stream id"));
+        }
+
+        Ok(stream::get_by_id(&self.db, self.stream_id.unwrap())?)
     }
 }
 
